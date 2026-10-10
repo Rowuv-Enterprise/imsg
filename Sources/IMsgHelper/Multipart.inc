@@ -15,6 +15,27 @@ static NSString *multipartFilePathError(NSString *filePath) {
     return nil;
 }
 
+/// Mark `{start, length, address}` ranges of one text part as confirmed
+/// mentions of `address`. A range outside the part is skipped, as formatting
+/// ranges are.
+static void applyMentionAttributes(NSMutableAttributedString *attr, NSArray *mentions) {
+    for (id raw in mentions) {
+        if (![raw isKindOfClass:[NSDictionary class]]) continue;
+        NSNumber *startNum = raw[@"start"];
+        NSNumber *lengthNum = raw[@"length"];
+        NSString *address = raw[@"address"];
+        if (![startNum isKindOfClass:[NSNumber class]]) continue;
+        if (![lengthNum isKindOfClass:[NSNumber class]]) continue;
+        if (![address isKindOfClass:[NSString class]] || address.length == 0) continue;
+        NSInteger start = startNum.integerValue;
+        NSInteger length = lengthNum.integerValue;
+        if (start < 0 || length <= 0) continue;
+        if ((NSUInteger)(start + length) > attr.length) continue;
+        [attr addAttribute:@"__kIMMentionConfirmedMention" value:address
+                     range:NSMakeRange((NSUInteger)start, (NSUInteger)length)];
+    }
+}
+
 static NSDictionary *handleSendMultipart(NSInteger requestId, NSDictionary *params) {
     NSString *chatGuid = params[@"chatGuid"];
     NSArray *parts = params[@"parts"];
@@ -68,9 +89,16 @@ static NSDictionary *handleSendMultipart(NSInteger requestId, NSDictionary *para
             NSString *text = part[@"text"];
             if (!text.length) continue;
             NSArray *partFormatting = part[@"textFormatting"];
+            NSArray *mentions = part[@"mentions"];
+            BOOL formatted = [partFormatting isKindOfClass:[NSArray class]]
+                && partFormatting.count > 0;
+            BOOL mentioned = [mentions isKindOfClass:[NSArray class]] && mentions.count > 0;
             NSAttributedString *seg;
-            if ([partFormatting isKindOfClass:[NSArray class]] && partFormatting.count > 0) {
-                seg = buildFormattedAttributed(text, partFormatting, partIndex);
+            if (formatted || mentioned) {
+                NSMutableAttributedString *rich = buildFormattedAttributed(
+                    text, formatted ? partFormatting : nil, partIndex);
+                if (mentioned) applyMentionAttributes(rich, mentions);
+                seg = rich;
             } else {
                 seg = buildPlainAttributed(text, partIndex);
             }

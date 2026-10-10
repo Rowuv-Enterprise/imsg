@@ -21,7 +21,7 @@ extension RPCServer {
     parts.reserveCapacity(rawParts.count)
     for (index, rawPart) in rawParts.enumerated() {
       if let key = rawPart.keys.sorted().first(where: {
-        ["attachment", "mention", "mentions"].contains($0)
+        ["attachment", "mention"].contains($0)
       }) {
         throw RPCError.invalidParams("\(key) parts are not supported")
       }
@@ -41,7 +41,7 @@ extension RPCServer {
       let part = try RPCParameters(
         rawPart,
         method: "send.multipart parts[\(index)]",
-        supportedKeys: ["text", "text_formatting", "textFormatting"]
+        supportedKeys: ["text", "text_formatting", "textFormatting", "mentions"]
       )
       guard let text = try part.string("text"), !text.isEmpty else {
         throw RPCError.invalidParams("parts[\(index)].text must be a non-empty string")
@@ -51,6 +51,10 @@ extension RPCServer {
         "text_formatting", aliases: ["textFormatting"])
       {
         bridgePart["textFormatting"] = formatting
+      }
+      if let rawMentions = try part.objectArray("mentions") {
+        bridgePart["mentions"] = try Self.multipartMentions(
+          rawMentions, textLength: text.utf16.count, partIndex: index)
       }
       parts.append(bridgePart)
     }
@@ -103,4 +107,28 @@ extension RPCServer {
   }
 
   static let multipartFileLimit = 10
+
+  /// A mention is a UTF-16 range of one text part and the address it names.
+  /// Anything else in the object, or a range outside the part, is refused here
+  /// so the bridge never sees a mention it would silently drop.
+  static func multipartMentions(
+    _ rawMentions: [[String: Any]], textLength: Int, partIndex: Int
+  ) throws -> [[String: Any]] {
+    try rawMentions.enumerated().map { (offset, rawMention) -> [String: Any] in
+      let name = "send.multipart parts[\(partIndex)].mentions[\(offset)]"
+      let mention = try RPCParameters(
+        rawMention, method: name, supportedKeys: ["start", "length", "address"])
+      guard
+        let start = try mention.integer("start"), let length = try mention.integer("length"),
+        start >= 0, length > 0, start <= textLength, length <= textLength - start
+      else {
+        throw RPCError.invalidParams("\(name) must be a range inside the part's text")
+      }
+      guard let address = try mention.string("address"), !address.isEmpty, address.count <= 254
+      else {
+        throw RPCError.invalidParams("\(name).address must be a non-empty string")
+      }
+      return ["start": start, "length": length, "address": address]
+    }
+  }
 }

@@ -185,7 +185,7 @@ func rpcStrictSendBaselineFailureIsPreDispatchInternalError() async throws {
 }
 
 @Test
-func rpcMultipartStagesFilePartsInOrder() async throws {
+func rpcMultipartStagesFilePartsAndPassesMentionRanges() async throws {
   let store = try makeGUIDVerificationStore()
   let output = TestRPCOutput()
   var actions: [BridgeAction] = []
@@ -212,7 +212,7 @@ func rpcMultipartStagesFilePartsInOrder() async throws {
   await server.handleLineForTesting(
     #"{"jsonrpc":"2.0","id":"files","method":"send.multipart","params":{"chat_id":1,"parts":["#
       + #"{"file":"/in/one.jpg"},{"file":"/in/two.png"},"#
-      + #"{"text":"Hi Sam"}]}}"#
+      + #"{"text":"Hi Sam","mentions":[{"start":3,"length":3,"address":"+15550001111"}]}]}}"#
   )
 
   #expect(output.errors.isEmpty)
@@ -224,6 +224,11 @@ func rpcMultipartStagesFilePartsInOrder() async throws {
   #expect(parts[0]["filePath"] as? String == "/staged/1/one.jpg")
   #expect(parts[1]["filePath"] as? String == "/staged/2/two.png")
   #expect(parts[2]["text"] as? String == "Hi Sam")
+  let mentions = try #require(parts[2]["mentions"] as? [[String: Any]])
+  #expect(mentions.count == 1)
+  #expect(mentions[0]["start"] as? Int == 3)
+  #expect(mentions[0]["length"] as? Int == 3)
+  #expect(mentions[0]["address"] as? String == "+15550001111")
   let result = try #require(output.responses.first?["result"] as? [String: Any])
   #expect(result["guid"] as? String == "new-helper-guid")
   #expect(result["parts_count"] as? Int == 3)
