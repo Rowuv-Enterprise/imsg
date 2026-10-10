@@ -9,8 +9,8 @@ permissions:
   contents: read
 
 env:
-  ENGINE_TAG: v0.15.10-rowuv.3
-  ENGINE_SHA: 15af197439c95f4b9056ae6d60b2e27fb5cddab6
+  ENGINE_TAG: v0.15.10-rowuv.4
+  ENGINE_SHA: 6959a72767d5b46686c6b2b29f207e999af0f898
 
 jobs:
   test:
@@ -32,6 +32,7 @@ jobs:
         run: make test-native-replies
 
   build:
+    needs: test
     runs-on: macos-15
     timeout-minutes: 45
     permissions:
@@ -45,10 +46,10 @@ jobs:
       - name: Check the source is the tagged engine
         run: |
           set -euo pipefail
-          [[ "$(git rev-parse HEAD)" == "$ENGINE_SHA" ]]
-          [[ "$(git rev-parse "refs/tags/$ENGINE_TAG^{commit}")" == "$ENGINE_SHA" ]]
+          [[ "$(git rev-parse HEAD)" == "$ENGINE_SHA" ]] || exit 1
+          [[ "$(git rev-parse "refs/tags/$ENGINE_TAG^{commit}")" == "$ENGINE_SHA" ]] || exit 1
           source version.env
-          [[ "v$MARKETING_VERSION" == "$ENGINE_TAG" ]]
+          [[ "v$MARKETING_VERSION" == "$ENGINE_TAG" ]] || exit 1
           sw_vers
           swift --version
       - name: Resolve and patch dependencies
@@ -62,16 +63,16 @@ jobs:
           set -euo pipefail
           payload="$RUNNER_TEMP/payload"
           OUTPUT_DIR="$payload" CODESIGN_IDENTITY=- scripts/build-universal.sh
-          [[ -f "$payload/imsg" && -x "$payload/imsg" && -f "$payload/imsg-bridge-helper.dylib" ]]
-          [[ -n "$(find "$payload" -maxdepth 1 -type d -name '*.bundle' -print -quit)" ]]
-          [[ -z "$(find "$payload" -type l -print -quit)" ]]
-          [[ " $(lipo -archs "$payload/imsg") " == *' arm64 '* ]]
+          [[ -f "$payload/imsg" && -x "$payload/imsg" && -f "$payload/imsg-bridge-helper.dylib" ]] || exit 1
+          [[ -n "$(find "$payload" -maxdepth 1 -type d -name '*.bundle' -print -quit)" ]] || exit 1
+          [[ -z "$(find "$payload" -type l -print -quit)" ]] || exit 1
+          [[ " $(lipo -archs "$payload/imsg") " == *' arm64 '* ]] || exit 1
           for arch in arm64e arm64 x86_64; do
             lipo -archs "$payload/imsg-bridge-helper.dylib" | tr ' ' '\n' | grep -Fxq "$arch"
           done
           codesign --verify --strict "$payload/imsg"
           codesign --verify --strict "$payload/imsg-bridge-helper.dylib"
-          [[ "$("$payload/imsg" --version)" == *"${ENGINE_TAG#v}"* ]]
+          [[ "$("$payload/imsg" --version)" == *"${ENGINE_TAG#v}"* ]] || exit 1
           /usr/bin/ditto --norsrc -c -k "$payload" imsg-macos.zip
           shasum -a 256 imsg-macos.zip | tee imsg-macos.zip.sha256
           lipo -archs "$payload/imsg"
