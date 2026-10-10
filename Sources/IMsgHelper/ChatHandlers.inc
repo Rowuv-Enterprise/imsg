@@ -293,7 +293,7 @@ static NSDictionary *handleChatBackground(NSInteger requestId, NSDictionary *par
                 @(((long long (*)(id, SEL))objc_msgSend)(chat, safetySel));
         }
         id details = ((id (*)(id, SEL))objc_msgSend)(chat, detailsSel);
-        result[@"has_details"] = @(details != nil);
+        result[@"has_details"] = details ? @YES : @NO;
         if (details) {
             result[@"details_class"] = NSStringFromClass([details class]);
             if ([details isKindOfClass:[NSDictionary class]]) {
