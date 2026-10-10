@@ -10,7 +10,7 @@ permissions:
 
 env:
   ENGINE_TAG: v0.15.10-rowuv.3
-  ENGINE_SHA: d297cd0e08f2afc6f4da7a3c81a2aa1dc138c0b0
+  ENGINE_SHA: 15af197439c95f4b9056ae6d60b2e27fb5cddab6
 
 jobs:
   test:
