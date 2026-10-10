@@ -6,7 +6,9 @@ extension RPCServer {
     let params = try RPCParameters(
       params,
       method: "handles.check",
-      supportedKeys: ["address", "alias_type", "service", "refresh", "focus", "focus_fetch"]
+      supportedKeys: [
+        "address", "alias_type", "service", "refresh", "focus", "focus_fetch", "location",
+      ]
     )
     let address = try params.string("address") ?? ""
     guard !address.isEmpty else {
@@ -31,6 +33,7 @@ extension RPCServer {
     guard focus || !focusFetch else {
       throw RPCError.invalidParams("focus_fetch requires focus")
     }
+    let location = try params.boolean("location") ?? false
 
     let data = try await invokeBridge(
       action: .checkImessageAvailability,
@@ -40,6 +43,7 @@ extension RPCServer {
         "refresh": refresh,
         "focus": focus,
         "focusFetch": focusFetch,
+        "location": location,
       ])
 
     var result: [String: Any] = ["ok": true]
@@ -68,6 +72,21 @@ extension RPCServer {
     }
     if let focusError = data["focus_error"] as? String {
       result["focus_error"] = focusError
+    }
+    for key in ["location_supported", "location_handle", "location_sharing"] {
+      if let value = data[key] as? Bool { result[key] = value }
+    }
+    if let provisioned = data["location_provisioned"] as? NSNumber {
+      result["location_provisioned"] = provisioned.intValue
+    }
+    if let locationClass = data["location_class"] as? String {
+      result["location_class"] = locationClass
+    }
+    if let locationKeys = data["location_keys"] as? [String] {
+      result["location_keys"] = locationKeys
+    }
+    if let locationError = data["location_error"] as? String {
+      result["location_error"] = locationError
     }
     result["service"] = "iMessage"
     respond(id: id, result: result)

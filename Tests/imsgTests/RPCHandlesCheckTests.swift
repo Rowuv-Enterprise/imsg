@@ -132,6 +132,50 @@ func rpcHandlesCheckReadsFocusOnlyWhenAsked() async throws {
 }
 
 @Test
+func rpcHandlesCheckReadsLocationSharingOnlyWhenAsked() async throws {
+  let store = try CommandTestDatabase.makeStoreForRPC()
+  let output = TestRPCOutput()
+  var asked: [Bool?] = []
+  let server = RPCServer(
+    store: store,
+    verbose: false,
+    output: output,
+    invokeBridge: { _, params in
+      let location = params["location"] as? Bool
+      asked.append(location)
+      var data: [String: Any] = [
+        "address": "+14159369340", "alias_type": "phone", "id_status": 1, "available": true,
+      ]
+      if location == true {
+        data["location_supported"] = true
+        data["location_provisioned"] = 2
+        data["location_handle"] = true
+        data["location_sharing"] = true
+        data["location_class"] = "IMFindMyLocation"
+        data["location_keys"] = ["latitude", "longitude"]
+        data["latitude"] = 48.85
+      }
+      return data
+    },
+    isBridgeReady: { true }
+  )
+
+  let prefix = #"{"jsonrpc":"2.0","id":"handle","method":"handles.check","params":{"#
+  await server.handleLineForTesting(prefix + #""address":"+14159369340","location":true}}"#)
+  await server.handleLineForTesting(prefix + #""address":"+14159369340"}}"#)
+  await server.handleLineForTesting(prefix + #""address":"+14159369340","location":"yes"}}"#)
+
+  #expect(asked == [true, false])
+  let results = output.responses.compactMap { $0["result"] as? [String: Any] }
+  #expect(results.map { $0["location_sharing"] as? Bool } == [true, nil])
+  #expect(results.map { handlesCheckInt64Value($0["location_provisioned"]) } == [2, nil])
+  #expect(results.map { $0["location_class"] as? String } == ["IMFindMyLocation", nil])
+  #expect(results.map { $0["location_keys"] as? [String] } == [["latitude", "longitude"], nil])
+  #expect(results.allSatisfy { $0["latitude"] == nil })
+  #expect(output.errors.count == 1)
+}
+
+@Test
 func rpcHandlesCheckRequiresAddress() async throws {
   let store = try CommandTestDatabase.makeStoreForRPC()
   let output = TestRPCOutput()

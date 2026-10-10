@@ -694,6 +694,13 @@ Params:
   handle. With `focus_fetch` true Messages is first asked to update the value
   (`focus_fetch_started`); the value in the same result can predate the
   update, so read again a moment later. Nothing is observed after the call.
+- `location` (boolean, optional) — also read whether the address shares its
+  location with this account, as Messages already knows it. The result gains
+  `location_supported`, `location_provisioned` (the raw state of the Find My
+  session), `location_handle` and `location_sharing`, or `location_error`.
+  When the handle shares, `location_class` and `location_keys` name the class
+  of the location object and its properties; no coordinate or other value is
+  returned. Nothing is tracked, refreshed, started or stopped.
 
 Result:
 

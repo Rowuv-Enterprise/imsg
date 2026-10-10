@@ -78,6 +78,70 @@ static NSDictionary *focusStatusForAddress(NSString *address, BOOL fetch) {
     }
 }
 
+/// The names of the Objective-C properties of `cls` and its superclasses below
+/// NSObject. Names only: a caller learns the shape of an object, never a value.
+static NSArray<NSString *> *propertyNamesOfClass(Class cls) {
+    NSMutableSet<NSString *> *names = [NSMutableSet set];
+    for (Class current = cls; current && current != [NSObject class];
+         current = class_getSuperclass(current)) {
+        unsigned int count = 0;
+        objc_property_t *properties = class_copyPropertyList(current, &count);
+        for (unsigned int i = 0; i < count && names.count < 200; i++) {
+            const char *name = property_getName(properties[i]);
+            if (name) [names addObject:[NSString stringWithUTF8String:name]];
+        }
+        free(properties);
+    }
+    return [names.allObjects sortedArrayUsingSelector:@selector(compare:)];
+}
+
+/// Whether `address` shares its location with this account, as Messages
+/// already knows it: IMFMFSession's own answers, read once. Nothing here asks
+/// Find My to track, refresh, start or stop anything. When the handle does
+/// share, the class of the location object and the names of its properties
+/// are returned, never a coordinate or any other value.
+static NSDictionary *locationSharingForAddress(NSString *address) {
+    @try {
+        Class sessionClass = NSClassFromString(@"IMFMFSession");
+        if (![sessionClass respondsToSelector:@selector(sharedInstance)]) {
+            return @{@"location_supported": @NO,
+                     @"location_error": @"IMFMFSession is not available"};
+        }
+        id session = ((id (*)(id, SEL))objc_msgSend)(sessionClass, @selector(sharedInstance));
+        SEL sharingSel = NSSelectorFromString(@"handleIsSharingLocationWithMe:");
+        if (!session || ![session respondsToSelector:sharingSel]) {
+            return @{@"location_supported": @NO,
+                     @"location_error": @"Find My has no session in this process"};
+        }
+        NSMutableDictionary *result = [@{@"location_supported": @YES} mutableCopy];
+        SEL stateSel = NSSelectorFromString(@"fmfProvisionedState");
+        if ([session respondsToSelector:stateSel]) {
+            NSUInteger state = ((NSUInteger (*)(id, SEL))objc_msgSend)(session, stateSel);
+            result[@"location_provisioned"] = @(state);
+        }
+        IMAccount *account = activeIMessageAccount();
+        id handle = [account respondsToSelector:@selector(imHandleWithID:)]
+            ? [account imHandleWithID:address]
+            : nil;
+        result[@"location_handle"] = @(handle != nil);
+        if (!handle) return result;
+        BOOL sharing = ((BOOL (*)(id, SEL, id))objc_msgSend)(session, sharingSel, handle);
+        result[@"location_sharing"] = @(sharing);
+        SEL locationSel = NSSelectorFromString(@"findMyLocationForHandle:");
+        if (sharing && [session respondsToSelector:locationSel]) {
+            id location = ((id (*)(id, SEL, id))objc_msgSend)(session, locationSel, handle);
+            if (location) {
+                result[@"location_class"] = NSStringFromClass([location class]);
+                result[@"location_keys"] = propertyNamesOfClass([location class]);
+            }
+        }
+        return result;
+    } @catch (NSException *ex) {
+        return @{@"location_supported": @YES,
+                 @"location_error": ex.reason ?: @"location read failed"};
+    }
+}
+
 static NSDictionary *handleCheckIMessageAvailability(NSInteger requestId, NSDictionary *params) {
     NSString *address = params[@"address"];
     NSString *aliasType = params[@"aliasType"] ?: @"phone";
@@ -151,6 +215,9 @@ static NSDictionary *handleCheckIMessageAvailability(NSInteger requestId, NSDict
     if ([params[@"focus"] boolValue]) {
         [result addEntriesFromDictionary:
             focusStatusForAddress(address, [params[@"focusFetch"] boolValue])];
+    }
+    if ([params[@"location"] boolValue]) {
+        [result addEntriesFromDictionary:locationSharingForAddress(address)];
     }
     return successResponse(requestId, result);
 }
