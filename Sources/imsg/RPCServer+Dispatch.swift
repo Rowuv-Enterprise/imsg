@@ -103,6 +103,8 @@ extension RPCServer {
         try await handleNamePhotoShare(params: params, id: id)
       case .handlesCheck:
         try await handleHandlesCheck(params: params, id: id)
+      case .chatsBackground:
+        try await handleChatBackground(params: params, id: id)
       }
     } catch is CancellationError {
       return .completed

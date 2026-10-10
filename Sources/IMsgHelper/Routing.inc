@@ -50,6 +50,7 @@ static NSDictionary* dispatchAction(NSInteger legacyId, NSString *action,
     if ([action isEqualToString:@"set-display-name"]) return handleSetDisplayName(legacyId, params);
     if ([action isEqualToString:@"update-group-photo"]) return handleUpdateGroupPhoto(legacyId, params);
     if ([action isEqualToString:@"leave-chat"]) return handleLeaveChat(legacyId, params);
+    if ([action isEqualToString:@"chat-background"]) return handleChatBackground(legacyId, params);
     if ([action isEqualToString:@"delete-chat"]) return handleDeleteChat(legacyId, params);
     if ([action isEqualToString:@"create-chat"]) return handleCreateChat(legacyId, params);
     if ([action isEqualToString:@"search-messages"]) return handleSearchMessages(legacyId, params);

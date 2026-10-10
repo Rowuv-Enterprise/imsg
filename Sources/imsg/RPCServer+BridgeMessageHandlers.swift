@@ -342,6 +342,17 @@ extension RPCServer {
     respond(id: id, result: data.merging(["ok": true]) { current, _ in current })
   }
 
+  func handleChatBackground(params: [String: Any], id: Any?) async throws {
+    let params = try RPCParameters(
+      params,
+      method: "chats.background",
+      supportedKeys: RPCParameterKeys.chatTarget
+    )
+    let chatGUID = try await resolveChatGUIDParam(params)
+    let data = try await invokeBridge(action: .chatBackground, params: ["chatGuid": chatGUID])
+    respond(id: id, result: data.merging(["ok": true]) { current, _ in current })
+  }
+
   func handleNamePhotoShare(params: [String: Any], id: Any?) async throws {
     let params = try RPCParameters(
       params,

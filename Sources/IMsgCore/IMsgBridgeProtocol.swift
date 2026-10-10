@@ -92,6 +92,7 @@ public enum BridgeAction: String, Sendable, CaseIterable {
   case getNicknameInfo = "get-nickname-info"
   case shouldOfferNicknameSharing = "should-offer-nickname-sharing"
   case shareNickname = "share-nickname"
+  case chatBackground = "chat-background"
   case checkImessageAvailability = "check-imessage-availability"
   case downloadPurgedAttachment = "download-purged-attachment"
 
@@ -99,7 +100,8 @@ public enum BridgeAction: String, Sendable, CaseIterable {
   public var isMutation: Bool {
     switch self {
     case .ping, .status, .listChats, .checkTypingStatus, .searchMessages, .getAccountInfo,
-      .getNicknameInfo, .shouldOfferNicknameSharing, .checkImessageAvailability:
+      .getNicknameInfo, .shouldOfferNicknameSharing, .checkImessageAvailability,
+      .chatBackground:
       return false
     default:
       return true

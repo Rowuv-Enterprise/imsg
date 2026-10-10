@@ -650,6 +650,7 @@ existing iMessage chat; ordinary `send.rich` text does not.
 - `message.edit` edits `message_id` / `message_guid` with `text`.
 - `message.unsend`, `message.delete`, and `message.notifyAnyways` target `message_id` / `message_guid`.
 - `contacts.shouldShareContact` reads Apple Messages' advisory Name & Photo offer eligibility. The result includes `can_inspect_offer`, `can_share`, and tri-state `should_offer`.
+- `chats.background` reads the transcript background Messages holds for a chat (`chat_id` or `chat_guid`): `supported`, `guid`, `path`, `version`, `channel_transfer_guid`, `comm_safety_state`, and for a chat that has one `details_class`, `details_keys` and `details_description`. It sets nothing and sends nothing.
 - `contacts.shareContactCard` explicitly requests Apple Messages Name & Photo sharing. Despite the compatibility name, this does not send a vCard. Success reports `requested: true`, not delivery.
 
 The two `contacts.*` compatibility methods accept `chat_id`, `chat_identifier`,

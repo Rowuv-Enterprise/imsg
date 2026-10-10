@@ -252,6 +252,69 @@ static NSDictionary *handleLeaveChat(NSInteger requestId, NSDictionary *params) 
     return successResponse(requestId, @{@"chatGuid": chatGuid, @"left": @YES});
 }
 
+/// What an object getter of the chat returns, as text a caller can read, or
+/// null when the chat has no such getter or it returns nothing.
+static id chatBackgroundText(IMChat *chat, NSString *selectorName) {
+    SEL sel = NSSelectorFromString(selectorName);
+    if (![chat respondsToSelector:sel]) return [NSNull null];
+    id value = ((id (*)(id, SEL))objc_msgSend)(chat, sel);
+    if (!value) return [NSNull null];
+    NSString *text = [value isKindOfClass:[NSString class]] ? value : [value description];
+    return text.length > 512 ? [text substringToIndex:512] : text;
+}
+
+/// The transcript background of a chat as Messages holds it. Read only: no
+/// setter is called and nothing is sent to the chat. `details_class` and
+/// `details_keys` describe the object Messages keeps for the background, so
+/// that a caller can learn its shape from a chat that has one.
+static NSDictionary *handleChatBackground(NSInteger requestId, NSDictionary *params) {
+    NSString *chatGuid = params[@"chatGuid"];
+    if (!chatGuid.length) return errorResponse(requestId, @"Missing chatGuid");
+    IMChat *chat = resolveChatByGuid(chatGuid);
+    if (!chat) return errorResponse(requestId, @"Chat not found");
+    SEL detailsSel = NSSelectorFromString(@"transcriptBackgroundDetails");
+    if (![chat respondsToSelector:detailsSel]) {
+        return errorResponse(requestId, @"transcriptBackgroundDetails not available");
+    }
+    NSMutableDictionary *result = [@{@"chatGuid": chatGuid} mutableCopy];
+    @try {
+        SEL supportsSel = NSSelectorFromString(@"_supportsTranscriptBackgrounds");
+        result[@"supported"] = [chat respondsToSelector:supportsSel]
+            ? @(((BOOL (*)(id, SEL))objc_msgSend)(chat, supportsSel))
+            : (id)[NSNull null];
+        result[@"guid"] = chatBackgroundText(chat, @"transcriptBackgroundGUID");
+        result[@"path"] = chatBackgroundText(chat, @"transcriptBackgroundPath");
+        result[@"version"] = chatBackgroundText(chat, @"transcriptBackgroundVersion");
+        result[@"channel_transfer_guid"] =
+            chatBackgroundText(chat, @"transcriptBackgroundChannelTransferGUID");
+        SEL safetySel = NSSelectorFromString(@"transcriptBackgroundCommSafetyState");
+        if ([chat respondsToSelector:safetySel]) {
+            result[@"comm_safety_state"] =
+                @(((long long (*)(id, SEL))objc_msgSend)(chat, safetySel));
+        }
+        id details = ((id (*)(id, SEL))objc_msgSend)(chat, detailsSel);
+        result[@"has_details"] = @(details != nil);
+        if (details) {
+            result[@"details_class"] = NSStringFromClass([details class]);
+            if ([details isKindOfClass:[NSDictionary class]]) {
+                NSMutableDictionary *keys = [NSMutableDictionary dictionary];
+                for (id key in (NSDictionary *)details) {
+                    if (keys.count >= 100) break;
+                    keys[[key description]] =
+                        NSStringFromClass([[(NSDictionary *)details objectForKey:key] class]);
+                }
+                result[@"details_keys"] = keys;
+            }
+            NSString *text = [details description];
+            result[@"details_description"] =
+                text.length > 2000 ? [text substringToIndex:2000] : (text ?: @"");
+        }
+    } @catch (NSException *ex) {
+        return errorResponse(requestId, ex.reason ?: @"chat background read failed");
+    }
+    return successResponse(requestId, result);
+}
+
 static NSDictionary *handleDeleteChat(NSInteger requestId, NSDictionary *params) {
     NSString *chatGuid = params[@"chatGuid"];
     if (!chatGuid.length) return errorResponse(requestId, @"Missing chatGuid");

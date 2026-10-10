@@ -363,6 +363,9 @@ static NSDictionary* handleStatus(NSInteger requestId, NSDictionary *params) {
         @"leaveChat": @(
             [chatClass instancesRespondToSelector:@selector(leaveChat)]
                 || [chatClass instancesRespondToSelector:@selector(leave)]),
+        @"chatBackground": @(
+            [chatClass instancesRespondToSelector:
+                NSSelectorFromString(@"transcriptBackgroundDetails")]),
         @"checkIMessageAvailability": @(handleCheck),
         @"nicknameLookup": nicknameSelectors[@"nickname_lookup"],
         @"namePhotoShouldOffer": nicknameSelectors[@"should_offer"],
