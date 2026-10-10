@@ -234,11 +234,20 @@ static NSDictionary *handleLeaveChat(NSInteger requestId, NSDictionary *params) 
     IMChat *chat = resolveChatByGuid(chatGuid);
     if (!chat) return errorResponse(requestId, @"Chat not found");
     @try {
-        if ([chat respondsToSelector:@selector(leaveChat)]) {
-            [chat performSelector:@selector(leaveChat)];
-        } else {
+        // macOS 26 has no `leaveChat`; `leave` is the call that remains there.
+        SEL sel = 0;
+        for (NSString *name in @[@"leaveChat", @"leave"]) {
+            SEL cand = NSSelectorFromString(name);
+            if ([chat respondsToSelector:cand]) { sel = cand; break; }
+        }
+        if (!sel) {
             return errorResponse(requestId, @"leaveChat not available");
         }
+        if ([chat respondsToSelector:@selector(canLeaveChat)]
+            && !((BOOL (*)(id, SEL))objc_msgSend)(chat, @selector(canLeaveChat))) {
+            return errorResponse(requestId, @"Messages does not allow leaving this chat");
+        }
+        ((void (*)(id, SEL))objc_msgSend)(chat, sel);
     } @catch (NSException *ex) { return errorResponse(requestId, ex.reason ?: @"failed"); }
     return successResponse(requestId, @{@"chatGuid": chatGuid, @"left": @YES});
 }

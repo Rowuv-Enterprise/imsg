@@ -116,6 +116,8 @@ static NSDictionary *handleCheckIMessageAvailability(NSInteger requestId, NSDict
 - (void)sendMessage:(id)message;
 - (void)_sendMessage:(id)message adjustingSender:(BOOL)adjust shouldQueue:(BOOL)queue;
 - (void)leaveChat;
+- (void)leave;
+- (BOOL)canLeaveChat;
 - (void)_setDisplayName:(NSString *)name;
 - (BOOL)hasUnreadMessages;
 - (NSArray *)chatItems;

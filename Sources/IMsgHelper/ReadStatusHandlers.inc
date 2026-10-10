@@ -360,7 +360,9 @@ static NSDictionary* handleStatus(NSInteger requestId, NSDictionary *params) {
             [chatClass instancesRespondToSelector:@selector(sendGroupPhotoUpdate:)]),
         @"addParticipant": @(addParticipant),
         @"removeParticipant": @(removeParticipant),
-        @"leaveChat": @([chatClass instancesRespondToSelector:@selector(leaveChat)]),
+        @"leaveChat": @(
+            [chatClass instancesRespondToSelector:@selector(leaveChat)]
+                || [chatClass instancesRespondToSelector:@selector(leave)]),
         @"checkIMessageAvailability": @(handleCheck),
         @"nicknameLookup": nicknameSelectors[@"nickname_lookup"],
         @"namePhotoShouldOffer": nicknameSelectors[@"should_offer"],
