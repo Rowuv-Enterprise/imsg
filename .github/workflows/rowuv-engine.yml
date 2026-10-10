@@ -1,0 +1,88 @@
+name: Rowuv engine build
+
+on:
+  push:
+    branches: [rowuv/build]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  ENGINE_TAG: v0.15.10-rowuv.1
+  ENGINE_SHA: 0580788703b2f8e83dcefef8091c974163fd23cd
+
+jobs:
+  test:
+    runs-on: macos-26
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ env.ENGINE_SHA }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "26.10.0"
+      - name: Test
+        run: make test
+      - name: Native reply construction
+        run: make test-native-replies
+
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ env.ENGINE_SHA }}
+          fetch-depth: 0
+      - name: Check the source is the tagged engine
+        run: |
+          set -euo pipefail
+          [[ "$(git rev-parse HEAD)" == "$ENGINE_SHA" ]]
+          [[ "$(git rev-parse "refs/tags/$ENGINE_TAG^{commit}")" == "$ENGINE_SHA" ]]
+          source version.env
+          [[ "v$MARKETING_VERSION" == "$ENGINE_TAG" ]]
+          sw_vers
+          swift --version
+      - name: Resolve and patch dependencies
+        run: |
+          set -euo pipefail
+          scripts/generate-version.sh
+          swift package resolve
+          scripts/patch-deps.sh
+      - name: Build the universal engine and helper
+        run: |
+          set -euo pipefail
+          payload="$RUNNER_TEMP/payload"
+          OUTPUT_DIR="$payload" CODESIGN_IDENTITY=- scripts/build-universal.sh
+          [[ -f "$payload/imsg" && -x "$payload/imsg" && -f "$payload/imsg-bridge-helper.dylib" ]]
+          [[ -n "$(find "$payload" -maxdepth 1 -type d -name '*.bundle' -print -quit)" ]]
+          [[ -z "$(find "$payload" -type l -print -quit)" ]]
+          [[ " $(lipo -archs "$payload/imsg") " == *' arm64 '* ]]
+          for arch in arm64e arm64 x86_64; do
+            lipo -archs "$payload/imsg-bridge-helper.dylib" | tr ' ' '\n' | grep -Fxq "$arch"
+          done
+          codesign --verify --strict "$payload/imsg"
+          codesign --verify --strict "$payload/imsg-bridge-helper.dylib"
+          [[ "$("$payload/imsg" --version)" == *"${ENGINE_TAG#v}"* ]]
+          /usr/bin/ditto --norsrc -c -k "$payload" imsg-macos.zip
+          shasum -a 256 imsg-macos.zip | tee imsg-macos.zip.sha256
+          lipo -archs "$payload/imsg"
+          lipo -archs "$payload/imsg-bridge-helper.dylib"
+          unzip -l imsg-macos.zip | tail -25
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "$ENGINE_TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "imsg ${ENGINE_TAG#v}" \
+            --notes "openclaw/imsg v0.15.10 with emoji tapbacks (openclaw/imsg pull request 333) and the caller's message id kept in upper case. Ad hoc signed. Built from $ENGINE_SHA by run $GITHUB_RUN_ID." \
+            imsg-macos.zip imsg-macos.zip.sha256
