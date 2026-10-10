@@ -5,7 +5,7 @@ import Testing
 @testable import IMsgCore
 @testable import imsg
 
-private let trackedAttemptID = "8cc0c53a-7844-45ef-8b90-11f8a3e2cb66"
+private let trackedAttemptID = "8CC0C53A-7844-45EF-8B90-11F8A3E2CB66"
 
 private func trackedRequest(id: String, attemptID: String = trackedAttemptID) -> String {
   """
@@ -46,7 +46,7 @@ func rpcTrackedSendForwardsCallerOwnedGuidAndReturnsExactIdentity() async throws
   )
 
   await server.handleLineForTesting(
-    trackedRequest(id: "tracked", attemptID: trackedAttemptID.uppercased()))
+    trackedRequest(id: "tracked", attemptID: trackedAttemptID.lowercased()))
 
   #expect(appleScriptCalled == false)
   #expect(capturedActions == [.status, .sendMessage])
@@ -96,7 +96,7 @@ func rpcTrackedSendRejectsExistingGuidCaseInsensitivelyBeforeBridgeIO() async th
   let store = try CommandTestDatabase.makeStoreForRPCDirectChat()
   _ = try store.withConnection { db in
     try db.run("ALTER TABLE message ADD COLUMN guid TEXT")
-    try db.run("UPDATE message SET guid = ? WHERE ROWID = 5", trackedAttemptID.uppercased())
+    try db.run("UPDATE message SET guid = ? WHERE ROWID = 5", trackedAttemptID.lowercased())
   }
   let output = TestRPCOutput()
   var bridgeCalled = false

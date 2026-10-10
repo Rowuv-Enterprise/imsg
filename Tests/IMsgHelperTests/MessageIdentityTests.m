@@ -233,7 +233,7 @@ int main(void) {
             @"params": @{@"chatGuid": @"group-test", @"message": @"tracked",
                          @"clientMessageGuid": attempt}
         });
-        check([tracked[@"data"][@"messageGuid"] isEqual:attempt] && dispatchedMessage != nil,
+        check([tracked[@"data"][@"messageGuid"] isEqual:attempt.uppercaseString] && dispatchedMessage != nil,
               @"Tracked group send retains the caller GUID through the v2 envelope");
         dispatchedMessage = nil;
         NSDictionary *rejected = processV2Envelope(@{
