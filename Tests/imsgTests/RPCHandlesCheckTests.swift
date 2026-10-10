@@ -54,6 +54,44 @@ func rpcHandlesCheckInvokesBridgeAndReturnsAvailability() async throws {
 }
 
 @Test
+func rpcHandlesCheckPassesRefreshAndReportsTheLookup() async throws {
+  let store = try CommandTestDatabase.makeStoreForRPC()
+  let output = TestRPCOutput()
+  var refreshes: [Bool?] = []
+  let server = RPCServer(
+    store: store,
+    verbose: false,
+    output: output,
+    invokeBridge: { _, params in
+      let refresh = params["refresh"] as? Bool
+      refreshes.append(refresh)
+      var data: [String: Any] = [
+        "address": "+14159369340",
+        "alias_type": "phone",
+        "destination": "tel:+14159369340",
+        "id_status": 0,
+        "available": false,
+        "refresh_started": refresh == true,
+      ]
+      if refresh != true { data["refresh_status"] = 2 }
+      return data
+    },
+    isBridgeReady: { true }
+  )
+
+  let prefix = #"{"jsonrpc":"2.0","id":"handle","method":"handles.check","params":{"#
+  await server.handleLineForTesting(prefix + #""address":"+14159369340","refresh":true}}"#)
+  await server.handleLineForTesting(prefix + #""address":"+14159369340"}}"#)
+  await server.handleLineForTesting(prefix + #""address":"+14159369340","refresh":"yes"}}"#)
+
+  #expect(refreshes == [true, false])
+  let results = output.responses.compactMap { $0["result"] as? [String: Any] }
+  #expect(results.map { $0["refresh_started"] as? Bool } == [true, false])
+  #expect(results.map { handlesCheckInt64Value($0["refresh_status"]) } == [nil, 2])
+  #expect(output.errors.count == 1)
+}
+
+@Test
 func rpcHandlesCheckRequiresAddress() async throws {
   let store = try CommandTestDatabase.makeStoreForRPC()
   let output = TestRPCOutput()

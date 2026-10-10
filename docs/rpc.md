@@ -683,6 +683,11 @@ Params:
 - `address` (string, required) — phone number or email address.
 - `alias_type` (`phone` | `email`, optional) — inferred from `address` when omitted.
 - `service` (`iMessage`, optional) — SMS checks are rejected.
+- `refresh` (boolean, optional) — when true and Messages holds no answer for
+  the address, ask Apple once. The call does not wait: it returns what is
+  known now with `refresh_started`, and a later call returns the answer once
+  it has arrived. A lookup is not repeated for the same address within a
+  minute. Without `refresh` the check reads only what Messages already knows.
 
 Result:
 
@@ -694,9 +699,13 @@ Result:
   "destination": "tel:+14155551212",
   "id_status": 1,
   "available": true,
+  "refresh_started": false,
   "service": "iMessage"
 }
 ```
+
+`refresh_status` is present while an answer to a lookup of the last minute is
+held: Apple's status for the address, or `-1` when the answer carried none.
 
 ### Native polls
 

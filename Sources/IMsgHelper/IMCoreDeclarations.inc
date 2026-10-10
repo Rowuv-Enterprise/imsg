@@ -260,5 +260,10 @@ static NSAttributedString *annotateBodyForRichLink(NSAttributedString *body,
                                     service:(NSString *)service
                                  listenerID:(NSString *)listenerID;
 - (id)currentIDStatusForDestination:(NSString *)destination service:(id)service;
+- (BOOL)forceRefreshIDStatusForDestinations:(NSArray *)destinations
+                                    service:(NSString *)service
+                                 listenerID:(NSString *)listenerID
+                                      queue:(dispatch_queue_t)queue
+                            completionBlock:(void (^)(NSDictionary *statuses))block;
 @end
 

@@ -6,7 +6,7 @@ extension RPCServer {
     let params = try RPCParameters(
       params,
       method: "handles.check",
-      supportedKeys: ["address", "alias_type", "service"]
+      supportedKeys: ["address", "alias_type", "service", "refresh"]
     )
     let address = try params.string("address") ?? ""
     guard !address.isEmpty else {
@@ -25,11 +25,14 @@ extension RPCServer {
       throw RPCError.invalidParams("handles.check only supports service iMessage")
     }
 
+    let refresh = try params.boolean("refresh") ?? false
+
     let data = try await invokeBridge(
       action: .checkImessageAvailability,
       params: [
         "address": address,
         "aliasType": aliasType,
+        "refresh": refresh,
       ])
 
     var result: [String: Any] = ["ok": true]
@@ -43,6 +46,12 @@ extension RPCServer {
     }
     if let available = data["available"] as? Bool {
       result["available"] = available
+    }
+    if let refreshStarted = data["refresh_started"] as? Bool {
+      result["refresh_started"] = refreshStarted
+    }
+    if let refreshStatus = data["refresh_status"] as? NSNumber {
+      result["refresh_status"] = refreshStatus.intValue
     }
     result["service"] = "iMessage"
     respond(id: id, result: result)
