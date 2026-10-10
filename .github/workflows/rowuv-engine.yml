@@ -9,8 +9,8 @@ permissions:
   contents: read
 
 env:
-  ENGINE_TAG: v0.15.10-rowuv.5
-  ENGINE_SHA: 2c0587821e59f6faf77fa8b4b9e0ebbe036c8245
+  ENGINE_TAG: v0.15.10-rowuv.6
+  ENGINE_SHA: 152aaa6aef5da046af8dba57198b82e57b5aa4a6
 
 jobs:
   test:
