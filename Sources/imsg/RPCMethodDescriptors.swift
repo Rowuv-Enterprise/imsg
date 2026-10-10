@@ -51,6 +51,7 @@ enum RPCDispatchRoute: Sendable, Equatable {
   case messageNotifyAnyways, messageSendStatus, chatsCreate, chatsDelete, chatsMarkUnread
   case groupRename, groupSetIcon, groupAddParticipant, groupRemoveParticipant, groupLeave
   case contactsShouldShare, contactsShare, handlesCheck, chatsBackground
+  case chatsSetBackground, chatsRemoveBackground
 }
 
 struct RPCMethodDescriptor: Sendable, Equatable {
@@ -210,6 +211,12 @@ let rpcMethodDescriptors: [RPCMethodDescriptor] = [
   RPCMethodDescriptor(
     "chats.background", route: .chatsBackground, lane: .read,
     bridge: .selector("chatBackground"), macOSOnly: true),
+  RPCMethodDescriptor(
+    "chats.setBackground", route: .chatsSetBackground, lane: .mutation,
+    bridge: .selector("chatBackgroundSet"), macOSOnly: true),
+  RPCMethodDescriptor(
+    "chats.removeBackground", route: .chatsRemoveBackground, lane: .mutation,
+    bridge: .selector("chatBackgroundSet"), macOSOnly: true),
 ]
 
 let kSupportedRPCMethods: [String] =

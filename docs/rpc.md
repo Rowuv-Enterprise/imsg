@@ -651,6 +651,7 @@ existing iMessage chat; ordinary `send.rich` text does not.
 - `message.unsend`, `message.delete`, and `message.notifyAnyways` target `message_id` / `message_guid`.
 - `contacts.shouldShareContact` reads Apple Messages' advisory Name & Photo offer eligibility. The result includes `can_inspect_offer`, `can_share`, and tri-state `should_offer`.
 - `chats.background` reads the transcript background Messages holds for a chat (`chat_id` or `chat_guid`): `supported`, `guid`, `path`, `version`, `channel_transfer_guid`, `comm_safety_state`, and for a chat that has one `details_class`, `details_keys` and `details_description`. It sets nothing and sends nothing.
+- `chats.setBackground` sets a chat's transcript background from `file`, a PosterKit configuration archive as Messages writes it, with an optional `watch_file` (the archive's watch image). Both are staged for Messages and sent under a fresh transfer id, returned as `transfer_id`. `chats.removeBackground` removes the background. Success means Messages took the call, not that the chat changed: read `chats.background` afterwards, where `guid` equals the transfer id once the background is set and is null once it is removed.
 - `contacts.shareContactCard` explicitly requests Apple Messages Name & Photo sharing. Despite the compatibility name, this does not send a vCard. Success reports `requested: true`, not delivery.
 
 The two `contacts.*` compatibility methods accept `chat_id`, `chat_identifier`,

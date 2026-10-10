@@ -105,6 +105,10 @@ extension RPCServer {
         try await handleHandlesCheck(params: params, id: id)
       case .chatsBackground:
         try await handleChatBackground(params: params, id: id)
+      case .chatsSetBackground:
+        try await handleChatSetBackground(params: params, id: id)
+      case .chatsRemoveBackground:
+        try await handleChatRemoveBackground(params: params, id: id)
       }
     } catch is CancellationError {
       return .completed

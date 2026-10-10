@@ -366,6 +366,11 @@ static NSDictionary* handleStatus(NSInteger requestId, NSDictionary *params) {
         @"chatBackground": @(
             [chatClass instancesRespondToSelector:
                 NSSelectorFromString(@"transcriptBackgroundDetails")]),
+        @"chatBackgroundSet": @(
+            [chatClass instancesRespondToSelector:
+                NSSelectorFromString(@"setTranscriptBackgroundAndSendToChat:transferID:")]
+                && [chatClass instancesRespondToSelector:
+                    NSSelectorFromString(@"updateTranscriptBackgroundChannelTransferGUID:")]),
         @"checkIMessageAvailability": @(handleCheck),
         @"nicknameLookup": nicknameSelectors[@"nickname_lookup"],
         @"namePhotoShouldOffer": nicknameSelectors[@"should_offer"],

@@ -315,6 +315,73 @@ static NSDictionary *handleChatBackground(NSInteger requestId, NSDictionary *par
     return successResponse(requestId, result);
 }
 
+/// Sets or removes the transcript background of a chat with the two calls
+/// Messages itself makes. With `filePath`, a PosterKit configuration archive,
+/// the archive (and `watchPath`, its watch image, when given) is copied into
+/// this process's temporary directory under fresh names, as Messages does,
+/// and sent under a fresh transfer id. Without `filePath` the background is
+/// removed. The window's own poster transition is not run.
+static NSDictionary *handleSetChatBackground(NSInteger requestId, NSDictionary *params) {
+    NSString *chatGuid = params[@"chatGuid"];
+    NSString *filePath = params[@"filePath"];
+    NSString *watchPath = params[@"watchPath"];
+    if (!chatGuid.length) return errorResponse(requestId, @"Missing chatGuid");
+    IMChat *chat = resolveChatByGuid(chatGuid);
+    if (!chat) return errorResponse(requestId, @"Chat not found");
+    SEL setSel = NSSelectorFromString(@"setTranscriptBackgroundAndSendToChat:transferID:");
+    SEL channelSel = NSSelectorFromString(@"updateTranscriptBackgroundChannelTransferGUID:");
+    if (![chat respondsToSelector:setSel] || ![chat respondsToSelector:channelSel]) {
+        return errorResponse(requestId, @"Chat backgrounds are unavailable");
+    }
+    SEL supportsSel = NSSelectorFromString(@"_supportsTranscriptBackgrounds");
+    if ([chat respondsToSelector:supportsSel]
+        && !((BOOL (*)(id, SEL))objc_msgSend)(chat, supportsSel)) {
+        return errorResponse(requestId, @"Messages does not allow a background in this chat");
+    }
+    NSString *transferID = [[NSUUID UUID] UUIDString];
+    @try {
+        if (!filePath.length) {
+            ((void (*)(id, SEL, id, id))objc_msgSend)(chat, setSel, nil, transferID);
+            ((void (*)(id, SEL, id))objc_msgSend)(chat, channelSel, nil);
+            return successResponse(requestId, @{
+                @"chatGuid": chatGuid, @"removed": @YES, @"transfer_id": transferID
+            });
+        }
+        if (pathHasSymlinkComponent(filePath)
+            || (watchPath.length && pathHasSymlinkComponent(watchPath))) {
+            return errorResponse(requestId, @"Background path traverses a symlink");
+        }
+        NSFileManager *files = [NSFileManager defaultManager];
+        NSString *folder = [NSTemporaryDirectory()
+            stringByAppendingPathComponent:[[NSUUID UUID] UUIDString]];
+        NSString *archive = [folder stringByAppendingPathComponent:[[NSUUID UUID] UUIDString]];
+        NSError *error = nil;
+        if (![files createDirectoryAtPath:folder
+                withIntermediateDirectories:YES attributes:nil error:&error]
+            || ![files copyItemAtPath:filePath toPath:archive error:&error]) {
+            return errorResponse(requestId,
+                [NSString stringWithFormat:@"Could not copy the background archive: %@",
+                                           error.localizedDescription ?: @"unknown error"]);
+        }
+        if (watchPath.length
+            && ![files copyItemAtPath:watchPath
+                               toPath:[archive stringByAppendingString:@"-watchBackground"]
+                                error:&error]) {
+            return errorResponse(requestId,
+                [NSString stringWithFormat:@"Could not copy the background watch image: %@",
+                                           error.localizedDescription ?: @"unknown error"]);
+        }
+        NSString *location = [[NSURL fileURLWithPath:archive] absoluteString];
+        ((void (*)(id, SEL, id))objc_msgSend)(chat, channelSel, transferID);
+        ((void (*)(id, SEL, id, id))objc_msgSend)(chat, setSel, location, transferID);
+        return successResponse(requestId, @{
+            @"chatGuid": chatGuid, @"removed": @NO, @"transfer_id": transferID
+        });
+    } @catch (NSException *ex) {
+        return errorResponse(requestId, ex.reason ?: @"chat background change failed");
+    }
+}
+
 static NSDictionary *handleDeleteChat(NSInteger requestId, NSDictionary *params) {
     NSString *chatGuid = params[@"chatGuid"];
     if (!chatGuid.length) return errorResponse(requestId, @"Missing chatGuid");

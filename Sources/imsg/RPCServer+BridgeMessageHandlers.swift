@@ -353,6 +353,46 @@ extension RPCServer {
     respond(id: id, result: data.merging(["ok": true]) { current, _ in current })
   }
 
+  func handleChatSetBackground(params: [String: Any], id: Any?) async throws {
+    let params = try RPCParameters(
+      params,
+      method: "chats.setBackground",
+      supportedKeys: RPCParameterKeys.combining(RPCParameterKeys.chatTarget, ["file", "watch_file"])
+    )
+    guard let file = try params.string("file"), !file.isEmpty else {
+      throw RPCError.invalidParams("file is required")
+    }
+    let watch = try params.string("watch_file")
+    let chatGUID = try await resolveChatGUIDParam(params)
+    var bridgeParams: [String: Any] = ["chatGuid": chatGUID]
+    do {
+      bridgeParams["filePath"] = try stageAttachment((file as NSString).expandingTildeInPath)
+      if let watch, !watch.isEmpty {
+        bridgeParams["watchPath"] = try stageAttachment((watch as NSString).expandingTildeInPath)
+      }
+    } catch {
+      throw DeliveryFailure(
+        disposition: .notStarted,
+        transport: .bridgeV2,
+        operation: BridgeAction.setChatBackground.rawValue,
+        detail: "The background could not be staged before bridge dispatch."
+      )
+    }
+    let data = try await invokeBridge(action: .setChatBackground, params: bridgeParams)
+    respond(id: id, result: data.merging(["ok": true]) { current, _ in current })
+  }
+
+  func handleChatRemoveBackground(params: [String: Any], id: Any?) async throws {
+    let params = try RPCParameters(
+      params,
+      method: "chats.removeBackground",
+      supportedKeys: RPCParameterKeys.chatTarget
+    )
+    let chatGUID = try await resolveChatGUIDParam(params)
+    let data = try await invokeBridge(action: .setChatBackground, params: ["chatGuid": chatGUID])
+    respond(id: id, result: data.merging(["ok": true]) { current, _ in current })
+  }
+
   func handleNamePhotoShare(params: [String: Any], id: Any?) async throws {
     let params = try RPCParameters(
       params,

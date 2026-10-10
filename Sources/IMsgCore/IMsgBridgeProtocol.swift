@@ -93,6 +93,7 @@ public enum BridgeAction: String, Sendable, CaseIterable {
   case shouldOfferNicknameSharing = "should-offer-nickname-sharing"
   case shareNickname = "share-nickname"
   case chatBackground = "chat-background"
+  case setChatBackground = "set-chat-background"
   case checkImessageAvailability = "check-imessage-availability"
   case downloadPurgedAttachment = "download-purged-attachment"
 
