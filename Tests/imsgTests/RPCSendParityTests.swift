@@ -185,6 +185,76 @@ func rpcStrictSendBaselineFailureIsPreDispatchInternalError() async throws {
 }
 
 @Test
+func rpcMultipartStagesFilePartsInOrder() async throws {
+  let store = try makeGUIDVerificationStore()
+  let output = TestRPCOutput()
+  var actions: [BridgeAction] = []
+  var published: [String: Any] = [:]
+  var staged: [String] = []
+  let server = RPCServer(
+    store: store,
+    verbose: false,
+    output: output,
+    invokeBridge: { action, params in
+      actions.append(action)
+      if action == .sendMultipart {
+        published = params
+        try insertOutgoing(into: store, guid: "new-helper-guid")
+      }
+      return StrictSendSurface.multipart.bridgeResponse(for: action, messageGUID: "new-helper-guid")
+    },
+    stageAttachment: { path in
+      staged.append(path)
+      return "/staged/\(staged.count)/" + (path as NSString).lastPathComponent
+    }
+  )
+
+  await server.handleLineForTesting(
+    #"{"jsonrpc":"2.0","id":"files","method":"send.multipart","params":{"chat_id":1,"parts":["#
+      + #"{"file":"/in/one.jpg"},{"file":"/in/two.png"},"#
+      + #"{"text":"Hi Sam"}]}}"#
+  )
+
+  #expect(output.errors.isEmpty)
+  #expect(actions.contains(.status))
+  #expect(actions.filter { $0 == .sendMultipart }.count == 1)
+  #expect(staged == ["/in/one.jpg", "/in/two.png"])
+  let parts = try #require(published["parts"] as? [[String: Any]])
+  #expect(parts.count == 3)
+  #expect(parts[0]["filePath"] as? String == "/staged/1/one.jpg")
+  #expect(parts[1]["filePath"] as? String == "/staged/2/two.png")
+  #expect(parts[2]["text"] as? String == "Hi Sam")
+  let result = try #require(output.responses.first?["result"] as? [String: Any])
+  #expect(result["guid"] as? String == "new-helper-guid")
+  #expect(result["parts_count"] as? Int == 3)
+}
+
+@Test
+func rpcMultipartFilePartThatCannotBeStagedNeverReachesTheBridgeSend() async throws {
+  let store = try makeGUIDVerificationStore()
+  let output = TestRPCOutput()
+  var actions: [BridgeAction] = []
+  let server = RPCServer(
+    store: store,
+    verbose: false,
+    output: output,
+    invokeBridge: { action, _ in
+      actions.append(action)
+      return StrictSendSurface.multipart.bridgeResponse(for: action, messageGUID: "unused")
+    },
+    stageAttachment: { _ in throw CocoaError(.fileNoSuchFile) }
+  )
+
+  await server.handleLineForTesting(
+    #"{"jsonrpc":"2.0","id":"files","method":"send.multipart","params":{"chat_id":1,"parts":[{"file":"/in/missing.jpg"}]}}"#
+  )
+
+  #expect(!actions.contains(.sendMultipart))
+  #expect(output.responses.isEmpty)
+  #expect(output.errors.count == 1)
+}
+
+@Test
 func rpcStrictSendSurfacesAcceptOnlyNewHelperGUIDInTargetChat() async throws {
   for surface in StrictSendSurface.allCases {
     let store = try makeGUIDVerificationStore()

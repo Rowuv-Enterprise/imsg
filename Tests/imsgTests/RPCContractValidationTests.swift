@@ -251,6 +251,7 @@ func rpcMultipartRejectsInvalidPartsBeforeBridgeDispatch() async throws {
     }
   )
   let tooMany = Array(repeating: #"{"text":"x"}"#, count: 21).joined(separator: ",")
+  let tooManyFiles = Array(repeating: #"{"file":"photo.jpg"}"#, count: 11).joined(separator: ",")
   let params = [
     #"{}"#,
     #"{"parts":[]}"#,
@@ -259,11 +260,14 @@ func rpcMultipartRejectsInvalidPartsBeforeBridgeDispatch() async throws {
     #"{"parts":[{"text":1}]}"#,
     #"{"parts":[{"text":"hi","extra":true}]}"#,
     #"{"parts":[{"text":"hi","file":"photo.jpg"}]}"#,
+    #"{"parts":[{"file":""}]}"#,
+    #"{"parts":[{"file":1}]}"#,
     #"{"parts":[{"text":"hi","attachment":{}}]}"#,
     #"{"parts":[{"text":"hi","mention":"+123"}]}"#,
     #"{"parts":[{"text":"hi","text_formatting":[]}],"effect":1}"#,
     #"{"chat_id":1,"parts":[{"text":"hi","textFormatting":[],"text_formatting":[]}]}"#,
     "{\"chat_id\":1,\"parts\":[\(tooMany)]}",
+    "{\"chat_id\":1,\"parts\":[\(tooManyFiles)]}",
   ]
 
   for (index, value) in params.enumerated() {

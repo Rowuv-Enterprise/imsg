@@ -8,8 +8,9 @@ enum SendMultipartCommand {
     abstract: "Send a multi-part message",
     discussion: """
       Pass --parts as a JSON array (e.g., '[{"text":"hi"},{"text":"there"}]')
-      or via --parts-file pointing at a .json file. v1 supports text-only
-      parts; mention/file parts are a future enhancement.
+      or via --parts-file pointing at a .json file. This command sends text
+      parts only; file parts and mentions go through the send.multipart RPC,
+      which stages each file before the bridge sees it.
       """,
     signature: CommandSignatures.withRuntimeFlags(
       CommandSignature(
@@ -47,6 +48,9 @@ enum SendMultipartCommand {
       let data = partsRaw.data(using: .utf8),
       let parts = try JSONSerialization.jsonObject(with: data) as? [[String: Any]]
     else {
+      throw ParsedValuesError.invalidOption("parts")
+    }
+    guard !parts.contains(where: { $0["filePath"] != nil || $0["file"] != nil }) else {
       throw ParsedValuesError.invalidOption("parts")
     }
     var params: [String: Any] = ["chatGuid": chat, "parts": parts]

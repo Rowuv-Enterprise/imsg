@@ -1,3 +1,20 @@
+static NSAttributedString *buildAttachmentAttributed(NSString *transferGuid,
+                                                     NSString *filename,
+                                                     NSInteger partIndex);
+
+/// Same refusals as handleSendAttachment, so a file part cannot reach a path
+/// the single-attachment send would have refused.
+static NSString *multipartFilePathError(NSString *filePath) {
+    NSDictionary *attrs = [[NSFileManager defaultManager]
+        attributesOfItemAtPath:filePath error:nil];
+    if (!attrs) return [NSString stringWithFormat:@"File not found: %@", filePath];
+    if ([attrs[NSFileType] isEqualToString:NSFileTypeSymbolicLink]) {
+        return @"Symlinked attachment paths are not allowed";
+    }
+    if (pathHasSymlinkComponent(filePath)) return @"Attachment path traverses a symlink";
+    return nil;
+}
+
 static NSDictionary *handleSendMultipart(NSInteger requestId, NSDictionary *params) {
     NSString *chatGuid = params[@"chatGuid"];
     NSArray *parts = params[@"parts"];
@@ -17,20 +34,52 @@ static NSDictionary *handleSendMultipart(NSInteger requestId, NSDictionary *para
     }
 
     NSMutableAttributedString *body = [[NSMutableAttributedString alloc] init];
+    NSMutableArray<NSString *> *transferGuids = [NSMutableArray array];
+    NSMutableArray *transfers = [NSMutableArray array];
     NSInteger partIndex = 0;
-    for (NSDictionary *part in parts) {
-        if (![part isKindOfClass:[NSDictionary class]]) continue;
-        NSString *text = part[@"text"];
-        if (!text.length) continue;
-        NSArray *partFormatting = part[@"textFormatting"];
-        NSAttributedString *seg;
-        if ([partFormatting isKindOfClass:[NSArray class]] && partFormatting.count > 0) {
-            seg = buildFormattedAttributed(text, partFormatting, partIndex);
-        } else {
-            seg = buildPlainAttributed(text, partIndex);
+    @try {
+        for (NSDictionary *part in parts) {
+            if (![part isKindOfClass:[NSDictionary class]]) continue;
+            NSString *filePath = part[@"filePath"];
+            if ([filePath isKindOfClass:[NSString class]] && filePath.length) {
+                NSString *pathErr = multipartFilePathError(filePath);
+                if (pathErr) return errorResponse(requestId, pathErr);
+                NSURL *fileURL = [NSURL fileURLWithPath:filePath];
+                NSString *filename = [fileURL lastPathComponent];
+                NSString *prepErr = nil;
+                IMFileTransfer *transfer = prepareOutgoingTransfer(
+                    fileURL, filename, chatGuid, IMsgOutgoingTransferKindAttachment,
+                    nil, NULL, &prepErr);
+                if (!transfer) {
+                    return errorResponse(requestId,
+                        prepErr.length ? prepErr : @"Could not register attachment transfer");
+                }
+                NSString *transferGuid = [transfer guid];
+                if (!transferGuid.length) {
+                    return errorResponse(requestId, @"Transfer registered without guid");
+                }
+                [body appendAttributedString:buildAttachmentAttributed(transferGuid, filename,
+                                                                       partIndex)];
+                [transferGuids addObject:transferGuid];
+                [transfers addObject:transfer];
+                partIndex++;
+                continue;
+            }
+            NSString *text = part[@"text"];
+            if (!text.length) continue;
+            NSArray *partFormatting = part[@"textFormatting"];
+            NSAttributedString *seg;
+            if ([partFormatting isKindOfClass:[NSArray class]] && partFormatting.count > 0) {
+                seg = buildFormattedAttributed(text, partFormatting, partIndex);
+            } else {
+                seg = buildPlainAttributed(text, partIndex);
+            }
+            [body appendAttributedString:seg];
+            partIndex++;
         }
-        [body appendAttributedString:seg];
-        partIndex++;
+    } @catch (NSException *exception) {
+        return errorResponse(requestId,
+            [NSString stringWithFormat:@"send-multipart failed: %@", exception.reason]);
     }
     if (body.length == 0) {
         return errorResponse(requestId, @"No usable parts");
@@ -58,7 +107,7 @@ static NSDictionary *handleSendMultipart(NSInteger requestId, NSDictionary *para
                                       parentItem,
                                       selectedMessageGuid, associatedType,
                                       NSMakeRange(0, body.length),
-                                      nil, @[], NO, NO, nil);
+                                      nil, transferGuids, NO, NO, nil);
         if (!imMessage) {
             return errorResponse(requestId, @"Could not construct multipart IMMessage");
         }
@@ -72,11 +121,19 @@ static NSDictionary *handleSendMultipart(NSInteger requestId, NSDictionary *para
             [imMessage performSelector:@selector(setThreadIdentifier:)
                             withObject:threadIdentifier];
         }
+        for (IMFileTransfer *transfer in transfers) {
+            NSString *registerErr = nil;
+            if (!registerPreparedTransfer(transfer, &registerErr)) {
+                return errorResponse(requestId,
+                    registerErr.length ? registerErr : @"Could not register attachment transfer");
+            }
+        }
         dispatchIMMessageInChat(chat, imMessage, threadIdentifier, parentItem);
         NSString *guid = outgoingMessageGuid(imMessage);
         return successResponse(requestId, @{
             @"chatGuid": chatGuid,
             @"messageGuid": guid ?: @"",
+            @"transferGuids": transferGuids,
             @"parts_count": @(partIndex)
         });
     } @catch (NSException *exception) {
