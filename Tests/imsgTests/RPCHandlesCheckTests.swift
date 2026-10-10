@@ -92,6 +92,46 @@ func rpcHandlesCheckPassesRefreshAndReportsTheLookup() async throws {
 }
 
 @Test
+func rpcHandlesCheckReadsFocusOnlyWhenAsked() async throws {
+  let store = try CommandTestDatabase.makeStoreForRPC()
+  let output = TestRPCOutput()
+  var asked: [[Bool?]] = []
+  let server = RPCServer(
+    store: store,
+    verbose: false,
+    output: output,
+    invokeBridge: { _, params in
+      let focus = params["focus"] as? Bool
+      asked.append([focus, params["focusFetch"] as? Bool])
+      var data: [String: Any] = [
+        "address": "+14159369340", "alias_type": "phone", "id_status": 1, "available": true,
+      ]
+      if focus == true {
+        data["focus_supported"] = true
+        data["focus_handle"] = true
+        data["focus_status"] = 2
+        data["focus_fetch_started"] = params["focusFetch"] as? Bool == true
+      }
+      return data
+    },
+    isBridgeReady: { true }
+  )
+
+  let prefix = #"{"jsonrpc":"2.0","id":"handle","method":"handles.check","params":{"#
+  await server.handleLineForTesting(
+    prefix + #""address":"+14159369340","focus":true,"focus_fetch":true}}"#)
+  await server.handleLineForTesting(prefix + #""address":"+14159369340","focus":true}}"#)
+  await server.handleLineForTesting(prefix + #""address":"+14159369340"}}"#)
+  await server.handleLineForTesting(prefix + #""address":"+14159369340","focus_fetch":true}}"#)
+
+  #expect(asked == [[true, true], [true, false], [false, false]])
+  let results = output.responses.compactMap { $0["result"] as? [String: Any] }
+  #expect(results.map { handlesCheckInt64Value($0["focus_status"]) } == [2, 2, nil])
+  #expect(results.map { $0["focus_fetch_started"] as? Bool } == [true, false, nil])
+  #expect(output.errors.count == 1)
+}
+
+@Test
 func rpcHandlesCheckRequiresAddress() async throws {
   let store = try CommandTestDatabase.makeStoreForRPC()
   let output = TestRPCOutput()

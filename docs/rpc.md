@@ -688,6 +688,12 @@ Params:
   known now with `refresh_started`, and a later call returns the answer once
   it has arrived. A lookup is not repeated for the same address within a
   minute. Without `refresh` the check reads only what Messages already knows.
+- `focus` (boolean, optional) — also read how Messages sees the Focus of the
+  address. The result gains `focus_supported`, `focus_handle`, and
+  `focus_status`, the raw value of `IMHandleAvailabilityManager` for that
+  handle. With `focus_fetch` true Messages is first asked to update the value
+  (`focus_fetch_started`); the value in the same result can predate the
+  update, so read again a moment later. Nothing is observed after the call.
 
 Result:
 

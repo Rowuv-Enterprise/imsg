@@ -36,6 +36,48 @@ static BOOL startIDStatusLookup(id ctrl, NSString *destination) {
     return YES;
 }
 
+/// How Messages sees the Focus of `address`: IMHandleAvailabilityManager's
+/// value for that handle, read once. With `fetch`, Messages is first asked to
+/// update the value; that is one request, never an observation that outlives
+/// this call, so the value read here can be the one from before the update.
+static NSDictionary *focusStatusForAddress(NSString *address, BOOL fetch) {
+    @try {
+        Class managerClass = NSClassFromString(@"IMHandleAvailabilityManager");
+        if (![managerClass respondsToSelector:@selector(sharedInstance)]) {
+            return @{@"focus_supported": @NO};
+        }
+        id manager = ((id (*)(id, SEL))objc_msgSend)(managerClass, @selector(sharedInstance));
+        SEL readSel = NSSelectorFromString(@"availabilityForHandle:");
+        if (![manager respondsToSelector:readSel]) return @{@"focus_supported": @NO};
+        IMAccount *account = activeIMessageAccount();
+        id handle = [account respondsToSelector:@selector(imHandleWithID:)]
+            ? [account imHandleWithID:address]
+            : nil;
+        if (!handle) return @{@"focus_supported": @YES, @"focus_handle": @NO};
+        BOOL fetchStarted = NO;
+        if (fetch) {
+            SEL fetchSel = NSSelectorFromString(@"fetchUpdatedStatusForHandle:completion:");
+            if (![manager respondsToSelector:fetchSel]) {
+                fetchSel = NSSelectorFromString(@"_fetchUpdatedStatusForHandle:completion:");
+            }
+            if ([manager respondsToSelector:fetchSel]) {
+                void (^done)(void) = ^{};
+                ((void (*)(id, SEL, id, id))objc_msgSend)(manager, fetchSel, handle, done);
+                fetchStarted = YES;
+            }
+        }
+        NSInteger value = ((NSInteger (*)(id, SEL, id))objc_msgSend)(manager, readSel, handle);
+        return @{
+            @"focus_supported": @YES,
+            @"focus_handle": @YES,
+            @"focus_status": @(value),
+            @"focus_fetch_started": @(fetchStarted)
+        };
+    } @catch (NSException *ex) {
+        return @{@"focus_supported": @YES, @"focus_error": ex.reason ?: @"focus read failed"};
+    }
+}
+
 static NSDictionary *handleCheckIMessageAvailability(NSInteger requestId, NSDictionary *params) {
     NSString *address = params[@"address"];
     NSString *aliasType = params[@"aliasType"] ?: @"phone";
@@ -106,6 +148,10 @@ static NSDictionary *handleCheckIMessageAvailability(NSInteger requestId, NSDict
         @"refresh_started": @(refreshStarted)
     } mutableCopy];
     if (looked) result[@"refresh_status"] = looked;
+    if ([params[@"focus"] boolValue]) {
+        [result addEntriesFromDictionary:
+            focusStatusForAddress(address, [params[@"focusFetch"] boolValue])];
+    }
     return successResponse(requestId, result);
 }
 
